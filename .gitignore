@@ -1,0 +1,33 @@
+# Python & Virtual Environment
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Node & Frontend Build
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.npm/
+
+# Local databases, uploads, exports & test files
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/exports/*
+!backend/exports/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+*.log
+backend/test_batch_out.json
+
+# Environment & OS files
+.env
+.env.*
+.DS_Store
+Thumbs.db
+*.bak
+*.swp
