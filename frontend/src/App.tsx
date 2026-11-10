@@ -217,6 +217,27 @@ export const App: React.FC = () => {
         method: 'POST',
         body: formData
       });
+
+      // Handle duplicate detection (409 Conflict)
+      if (res.status === 409) {
+        const errData = await res.json();
+        const detail = errData.detail || {};
+        const existingName = detail.existing_filename || 'an existing document';
+        const existingId = detail.existing_file_id;
+        // Navigate to the existing document automatically
+        if (existingId) {
+          await refreshDocuments(existingId);
+          setSelectedDocId(existingId);
+          setTargetPage(1);
+          setActiveHighlights([]);
+          setActiveQuote(null);
+          showNotification(`⚠️ Already uploaded as "${existingName}" — opened it for you.`);
+        } else {
+          showNotification(`⚠️ Duplicate: "${existingName}" is already in your library.`);
+        }
+        return;
+      }
+
       if (!res.ok) throw new Error((await res.json()).detail || 'Failed to upload PDF');
       const data: PDFDoc = await res.json();
       

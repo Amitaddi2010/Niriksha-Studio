@@ -40,6 +40,7 @@ class Document(Base):
     title = Column(String, nullable=True)
     author = Column(String, nullable=True)
     status = Column(String, default="uploaded")  # 'uploaded', 'extracted', 'verified'
+    file_hash = Column(String, nullable=True, index=True)  # SHA-256 for duplicate detection
     created_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="documents")

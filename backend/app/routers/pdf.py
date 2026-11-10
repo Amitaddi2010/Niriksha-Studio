@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
+import hashlib
 
 from app.services.pdf_service import PDFService
 from app.config import UPLOAD_DIR
@@ -40,7 +41,9 @@ async def list_documents(db: Session = Depends(get_db)):
 
 @router.post("/upload")
 async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Upload PDF document, save to storage, and persist to database."""
+    """Upload PDF document, save to storage, and persist to database.
+    Rejects duplicates by comparing SHA-256 hash of file contents.
+    """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
     
@@ -48,9 +51,24 @@ async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    # --- Duplicate detection via SHA-256 hash ---
+    file_hash = hashlib.sha256(contents).hexdigest()
+    existing = db.query(models.Document).filter_by(file_hash=file_hash).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"This document is already uploaded as '{existing.filename}'.",
+                "duplicate": True,
+                "existing_file_id": existing.id,
+                "existing_filename": existing.filename,
+                "existing_status": existing.status,
+            }
+        )
+
     info = pdf_service.save_pdf(contents, file.filename)
     
-    # Store or update in database
+    # Store in database with hash
     db_doc = models.Document(
         id=info["file_id"],
         project_id="default",
@@ -60,6 +78,7 @@ async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)
         total_pages=info.get("total_pages", 1),
         title=info.get("title") or info["filename"],
         author=info.get("author") or "Unknown",
+        file_hash=file_hash,
         status="uploaded"
     )
     db.add(db_doc)
