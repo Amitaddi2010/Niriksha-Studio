@@ -45,7 +45,7 @@ async def _stream_extraction(
         pages = pdf_service.extract_pages(matches[0])
         doc_text = llm_service._prepare_document_text(pages)
 
-        batch_size = 6
+        batch_size = 4
         batches = [prompts[i:i + batch_size] for i in range(0, len(prompts), batch_size)]
         total_batches = len(batches)
         all_results = []

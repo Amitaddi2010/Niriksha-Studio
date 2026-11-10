@@ -240,7 +240,8 @@ class LMStudioService:
             "You are a rigorous scientific data extraction assistant for systematic literature reviews. "
             "You must extract data strictly supported by the document text. "
             "You MUST respond ONLY with a valid, parseable JSON object matching the requested schema. "
-            "Never output conversational markdown or text outside the JSON."
+            "Never output conversational markdown or text outside the JSON. "
+            "/no_think"
         )
 
         user_message = f"""DOCUMENT CONTENT:
@@ -278,7 +279,7 @@ Respond strictly in this JSON format with exactly {len(batch)} entries in 'resul
                 {"role": "user", "content": user_message}
             ],
             "temperature": temperature,
-            "max_tokens": 2500,
+            "max_tokens": 8000,
             "response_format": {"type": "text"}
         }
 
@@ -287,8 +288,25 @@ Respond strictly in this JSON format with exactly {len(batch)} entries in 'resul
             raise RuntimeError(f"LM Studio error ({resp.status_code}): {resp.text}")
 
         data = resp.json()
-        choice_msg = data["choices"][0]["message"]
-        raw_content = choice_msg.get("content") or choice_msg.get("reasoning") or ""
+        choice = data["choices"][0]
+        finish_reason = choice.get("finish_reason", "")
+        choice_msg = choice["message"]
+
+        # Qwen3.5 / thinking models output reasoning in "reasoning_content" (separate field)
+        # and the actual JSON answer in "content". Always prefer "content".
+        raw_content = choice_msg.get("content") or ""
+
+        # Strip any residual <think>...</think> blocks that some models embed in content
+        raw_content = re.sub(r"<think>.*?</think>", "", raw_content, flags=re.DOTALL).strip()
+
+        # Warn if truncated (finish_reason == "length") — JSON will be incomplete
+        if finish_reason == "length":
+            import logging
+            logging.getLogger(__name__).warning(
+                f"[Niriksha] LM Studio hit max_tokens (finish_reason=length) on batch of "
+                f"{len(batch)} prompts. Increase max_tokens or reduce batch_size."
+            )
+
         return self._parse_llm_json(raw_content, batch)
 
     async def extract_data(
